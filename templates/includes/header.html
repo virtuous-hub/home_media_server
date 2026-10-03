@@ -1,0 +1,83 @@
+{% load static %}
+
+<header>
+    <div class="logo">
+        HomeGallery
+    </div>
+
+    <nav class="main-nav">
+
+        <a href="{% url 'gallery' %}"
+           class="{% if request.resolver_match.url_name == 'gallery' %}active{% endif %}">
+            Главная
+        </a>
+
+        <a href="{% url 'all_photos' %}"
+           class="{% if request.resolver_match.url_name == 'all_photos' %}active{% endif %}">
+            Фото
+        </a>
+
+        {% if request.user.is_superuser or request.user.profile.can_manage_private %}
+            <a href="{% url 'private_photos' %}"
+               class="{% if request.resolver_match.url_name == 'private_photos' %}active{% endif %}">
+                Приват
+            </a>
+        {% endif %}
+        
+        <a href="/videos/"
+           class="{% if request.resolver_match.url_name == 'videos' %}active{% endif %}">
+            Видео
+        </a>
+
+        {% if request.user.is_authenticated %}
+            <div class="settings-menu">
+                <button
+                    type="button"
+                    class="settings-button"
+                    id="settings-button"
+                    aria-label="Настройки аккаунта"
+                >
+                    ⚙
+                </button>
+
+                <div
+                    class="settings-dropdown hidden"
+                    id="settings-dropdown"
+                >
+                    <div class="settings-user">
+                        <span class="settings-user-label">
+                            Пользователь
+                        </span>
+
+                        <strong>
+                            {{ request.user.username }}
+                        </strong>
+                    </div>
+
+                    <a
+                        href="{% url 'password_change' %}"
+                        class="settings-link"
+                    >
+                        Сменить пароль
+                    </a>
+
+                    <form
+                        method="post"
+                        action="{% url 'logout' %}"
+                    >
+                        {% csrf_token %}
+
+                        <button
+                            type="submit"
+                            class="settings-link settings-logout"
+                        >
+                            Выйти
+                        </button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+
+    </nav>
+
+</header>

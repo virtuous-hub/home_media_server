@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# PyCharm
+.idea/
+
+# Django database
+db.sqlite3
+*.sqlite3
+
+# Media
+media/
+protected_media/
+
+# Secrets / environment
+.env
+.env.*
+*.key
+*.pem
+*.crt
+
+# Local certificates
+cert/
+*.cert
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}
+Разбор фотографий — HomeGallery
+{% endblock %}
+
+{% block content %}
+
+<section class="review-upload">
+
+    <div class="review-header">
+        <h1>Разобрать фотографии</h1>
+
+        <p>
+            Отметьте фотографии, которые должны быть
+            приватными. Остальные попадут в общую галерею.
+        </p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="review-grid">
+
+            {% for photo in photos %}
+
+                <div class="review-item">
+
+                    <input
+                        type="checkbox"
+                        name="private_photos"
+                        value="{{ photo.key }}"
+                        id="private-{{ forloop.counter }}"
+                        class="review-checkbox"
+                    >
+
+                    <label
+                        for="private-{{ forloop.counter }}"
+                        class="review-photo-card"
+                    >
+
+                        <img
+                            src="{% url 'inbox_thumbnail' batch_id=photo.batch_id filename=photo.filename %}"
+                            alt=""
+                        >
+
+                        <span class="review-private-mark">
+                            ✓ Приват
+                        </span>
+
+                    </label>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+        <div class="review-footer">
+            <button
+                type="submit"
+                class="review-done-button"
+            >
+                Готово
+            </button>
+        </div>
+
+    </form>
+
+</section>
+
+{% endblock %}

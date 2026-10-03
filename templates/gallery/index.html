@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}
+Фото — HomeServer
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <h1>Домашний фотоархив</h1>
+
+    <p>
+        Фотографии и видео нашей семьи в одном месте.
+    </p>
+
+    <div
+        id="video-upload-progress"
+        class="video-upload-status hidden"
+    >
+        <div class="video-upload-spinner"></div>
+
+        <div class="video-upload-status-text">
+            Видео загружается...
+        </div>
+    </div>
+
+<div class="upload-actions">
+
+    <form method="post"
+          enctype="multipart/form-data"
+          id="upload-form">
+
+        {% csrf_token %}
+
+        <input
+            type="file"
+            name="photos"
+            id="photo-input"
+            accept="image/*"
+            multiple
+            hidden
+        >
+
+        <label for="photo-input" class="upload-button">
+            + Загрузить фото
+        </label>
+
+    </form>
+
+
+    <form method="post"
+          action="{% url 'upload_video' %}"
+          enctype="multipart/form-data"
+          id="video-upload-form">
+
+        {% csrf_token %}
+
+        <input
+            type="file"
+            name="videos"
+            id="video-input"
+            accept="video/*"
+            multiple
+            hidden
+        >
+
+        <label for="video-input" class="upload-button">
+            + Загрузить видео
+        </label>
+
+    </form>
+
+</div>
+
+</section>
+
+<section>
+    <h2 class="gallery-title">Последние фотографии</h2>
+
+    <div class="gallery">
+        {% for photo in photos %}
+
+            <div
+                class="photo"
+                data-photo-url="/media/photos/common/{{ photo.filename }}"
+                data-filename="{{ photo.filename }}"
+                data-date="{{ photo.date|date:'d.m.Y' }}"
+                onclick="openPhoto(this)"
+            >
+
+                <img
+                    src="/media/thumbnails/common/{{ photo.filename }}"
+                    alt="Фото"
+                >
+
+            </div>
+
+        {% endfor %}
+    </div>
+
+</section>
+
+    <h2>Последние видео</h2>
+    <div class="latest-videos">
+
+        {% for video in latest_videos %}
+            <div class="video-card"
+                 onclick="openVideo('/media/videos/{{ video.filename }}', '{{ video.filename }}')">
+                <img
+                    src="/media/video_thumbnails/{{ video.thumbnail }}"
+                    alt="Видео"
+                >
+                <div class="video-play">
+                    ▶
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+
+{% endblock %}

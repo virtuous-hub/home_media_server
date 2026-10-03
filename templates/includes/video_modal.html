@@ -1,0 +1,45 @@
+<div id="video-modal" class="modal">
+
+    <span class="modal-close" onclick="closeVideo()">×</span>
+
+    <div class="video-modal-content">
+
+        <video
+            id="modal-video"
+            class="modal-video"
+            controls
+        ></video>
+
+        <div class="photo-actions">
+
+            <a
+                id="video-download-button"
+                class="download-button"
+                href="#"
+            >
+                Скачать
+            </a>
+
+            <form id="video-delete-form" method="post">
+                {% csrf_token %}
+
+                <input
+                    type="hidden"
+                    name="next"
+                    value="{{ request.path }}"
+                >
+
+                <button
+                    type="submit"
+                    class="delete-button"
+                >
+                    Удалить
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}
+Все фото — HomeServer
+{% endblock %}
+
+{% block content %}
+
+<h1>Все фотографии</h1>
+
+<div class="gallery-toolbar">
+    <button
+        type="button"
+        id="select-mode-button"
+        class="select-mode-button">
+        Выбрать
+    </button>
+
+    <div id="bulk-actions" class="bulk-actions hidden">
+
+        <span id="selected-count" class="selected-count">
+            Выбрано: 0
+        </span>
+
+        <button
+            type="button"
+            id="download-selected"
+            class="bulk-button bulk-download"
+            aria-label="Скачать выбранные"
+        >
+            <span class="bulk-icon">↓</span>
+            <span class="bulk-label">Скачать выбранное</span>
+        </button>
+
+        <button
+            type="button"
+            id="delete-selected"
+            class="bulk-button bulk-delete"
+            aria-label="Удалить выбранные"
+        >
+            <span class="bulk-icon">🗑</span>
+            <span class="bulk-label">Удалить выбранное</span>
+        </button>
+
+        <button
+            type="button"
+            id="cancel-selection"
+            class="bulk-button bulk-cancel"
+            aria-label="Отменить выбор"
+        >
+            <span class="bulk-icon">✕</span>
+            <span class="bulk-label">Отмена</span>
+        </button>
+
+    </div>
+</div>
+
+<div class="gallery">
+    {% for photo in page_obj %}
+
+        <div
+            class="photo"
+            data-photo-url="/media/photos/common/{{ photo.filename }}"
+            data-filename="{{ photo.filename }}"
+            data-date="{{ photo.date|date:'d.m.Y' }}"
+            onclick="handlePhotoClick(this)"
+        >
+
+            <img
+                src="/media/thumbnails/common/{{ photo.filename }}"
+                alt="Фото"
+            >
+
+        </div>
+
+    {% endfor %}
+</div>
+
+<div class="pagination-controls">
+
+    <div class="pagination-left">
+        {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&per_page={{ page_obj.paginator.per_page }}"
+               class="nav-arrow"
+               aria-label="Назад">
+                ←
+            </a>
+        {% endif %}
+    </div>
+
+    <div class="page-numbers">
+        {% for num in page_obj.paginator.page_range %}
+
+            {% if num == page_obj.number %}
+                <span class="page-number active">
+                    {{ num }}
+                </span>
+            {% else %}
+                <a href="?page={{ num }}&per_page={{ page_obj.paginator.per_page }}"
+                   class="page-number">
+                    {{ num }}
+                </a>
+            {% endif %}
+
+        {% endfor %}
+    </div>
+
+    <div class="pagination-right">
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&per_page={{ page_obj.paginator.per_page }}"
+               class="nav-arrow"
+               aria-label="Вперёд">
+                →
+            </a>
+        {% endif %}
+    </div>
+
+</div>
+
+
+<div class="mobile-pagination">
+
+    {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}&per_page={{ page_obj.paginator.per_page }}"
+           class="nav-arrow">
+            ←
+        </a>
+    {% else %}
+        <span class="nav-arrow-placeholder"></span>
+    {% endif %}
+
+    <span class="mobile-page-counter">
+        {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+    </span>
+
+    {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}&per_page={{ page_obj.paginator.per_page }}"
+           class="nav-arrow">
+            →
+        </a>
+    {% else %}
+        <span class="nav-arrow-placeholder"></span>
+    {% endif %}
+
+</div>
+
+{% endblock %}
