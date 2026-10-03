@@ -1,7 +1,19 @@
 from datetime import datetime
+from pathlib import Path
 
 from django.conf import settings
 from PIL import Image
+
+
+def _safe_leaf_name(filename):
+    """Возвращает только имя файла без возможности выйти из каталога."""
+    normalized = str(filename).replace('\\', '/')
+    safe_name = Path(normalized).name
+
+    if not safe_name or safe_name in {'.', '..'}:
+        raise ValueError('Некорректное имя файла')
+
+    return safe_name
 
 
 def ensure_media_directories():
@@ -34,6 +46,8 @@ def create_thumbnail(
     photo_root=None,
     thumbnail_root=None,
 ):
+    filename = _safe_leaf_name(filename)
+
     if photo_root is None:
         photo_root = settings.COMMON_PHOTOS_ROOT
 
@@ -58,6 +72,8 @@ def delete_photo_files(
     photo_root=None,
     thumbnail_root=None,
 ):
+    filename = _safe_leaf_name(filename)
+
     if photo_root is None:
         photo_root = settings.COMMON_PHOTOS_ROOT
 
@@ -81,6 +97,8 @@ def get_photo_date(
     filename,
     photo_root=None,
 ):
+    filename = _safe_leaf_name(filename)
+
     if photo_root is None:
         photo_root = settings.COMMON_PHOTOS_ROOT
 

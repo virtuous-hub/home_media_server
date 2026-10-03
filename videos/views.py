@@ -2,11 +2,12 @@ import os
 from pathlib import Path
 
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.core.files.storage import FileSystemStorage
 from django.core.paginator import Paginator
-from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from .storage import create_video_thumbnail, delete_video_files
 
@@ -18,6 +19,47 @@ ALLOWED_VIDEO_EXTENSIONS = {
     '.webm',
     '.avi',
 }
+
+
+def _safe_filename(filename):
+    """Строгая проверка имени из URL/POST против path traversal."""
+    if not filename:
+        raise Http404
+
+    if '/' in filename or '\\' in filename:
+        raise Http404
+
+    if filename in {'.', '..'}:
+        raise Http404
+
+    return filename
+
+
+def _upload_filename(filename):
+    """Для загрузки оставляем только последнюю часть имени файла."""
+    normalized = str(filename).replace('\\', '/')
+    safe_name = Path(normalized).name
+
+    if not safe_name or safe_name in {'.', '..'}:
+        raise ValueError('Некорректное имя файла')
+
+    return safe_name
+
+
+def _safe_next_url(request, default):
+    next_url = request.POST.get('next')
+
+    if (
+        next_url
+        and url_has_allowed_host_and_scheme(
+            next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        )
+    ):
+        return next_url
+
+    return default
 
 
 @login_required
@@ -42,6 +84,9 @@ def videos(request):
 
     for filename in files:
         video_path = settings.VIDEOS_ROOT / filename
+
+        if not video_path.is_file():
+            continue
 
         videos_list.append({
             'filename': filename,
@@ -82,14 +127,26 @@ def upload_video(request):
     )
 
     video = uploaded_videos[0]
-    extension = Path(video.name).suffix.lower()
+
+    try:
+        upload_name = _upload_filename(video.name)
+    except ValueError:
+        return JsonResponse(
+            {
+                'success': False,
+                'error': 'Некорректное имя видео',
+            },
+            status=400,
+        )
+
+    extension = Path(upload_name).suffix.lower()
 
     if extension not in ALLOWED_VIDEO_EXTENSIONS:
         return JsonResponse(
             {
                 'success': False,
                 'error': (
-                    f'{video.name} не является '
+                    f'{upload_name} не является '
                     'поддерживаемым видео'
                 ),
             },
@@ -99,8 +156,7 @@ def upload_video(request):
     filename = None
 
     try:
-        filename = storage.save(video.name, video)
-
+        filename = storage.save(upload_name, video)
         create_video_thumbnail(filename)
 
     except Exception as error:
@@ -111,7 +167,7 @@ def upload_video(request):
             {
                 'success': False,
                 'error': (
-                    f'Не удалось обработать {video.name}: '
+                    f'Не удалось обработать {upload_name}: '
                     f'{error}'
                 ),
             },
@@ -129,14 +185,19 @@ def upload_video(request):
 
 @login_required
 def delete_video(request, filename):
-    if request.method == 'POST':
-        delete_video_files(filename)
+    safe_filename = _safe_filename(filename)
 
-        next_page = request.POST.get('next', '/videos/')
-        return redirect(next_page)
+    if request.method == 'POST':
+        delete_video_files(safe_filename)
+
+        return redirect(
+            _safe_next_url(request, '/videos/')
+        )
 
     return redirect('videos')
 
+
+@login_required
 def delete_selected_videos(request):
     if request.method != 'POST':
         return redirect('videos')
@@ -144,14 +205,20 @@ def delete_selected_videos(request):
     filenames = request.POST.getlist('videos')
 
     for filename in filenames:
-        delete_video_files(filename)
+        try:
+            safe_filename = _safe_filename(filename)
+        except Http404:
+            continue
+
+        delete_video_files(safe_filename)
 
     return redirect('videos')
 
 
 @login_required
 def download_video(request, filename):
-    video_path = settings.VIDEOS_ROOT / filename
+    safe_filename = _safe_filename(filename)
+    video_path = settings.VIDEOS_ROOT / safe_filename
 
     if not video_path.exists() or not video_path.is_file():
         raise Http404
@@ -159,5 +226,5 @@ def download_video(request, filename):
     return FileResponse(
         open(video_path, 'rb'),
         as_attachment=True,
-        filename=filename
+        filename=safe_filename,
     )

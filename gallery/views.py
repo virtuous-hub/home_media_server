@@ -12,9 +12,90 @@ from django.core.paginator import Paginator
 from django.http import FileResponse, Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.static import serve as django_static_serve
 from PIL import Image, UnidentifiedImageError
 
+from .models import Profile
 from .storage import create_thumbnail, delete_photo_files, get_photo_date
+
+
+def _can_manage_private(user):
+    if user.is_superuser:
+        return True
+
+    profile, _ = Profile.objects.get_or_create(user=user)
+    return profile.can_manage_private
+
+
+def _safe_filename(filename):
+    """Строгая проверка имени из URL/POST против path traversal."""
+    if not filename:
+        raise Http404
+
+    if '/' in filename or '\\' in filename:
+        raise Http404
+
+    if filename in {'.', '..'}:
+        raise Http404
+
+    return filename
+
+
+def _upload_filename(filename):
+    normalized = str(filename).replace('\\', '/')
+    safe_name = Path(normalized).name
+
+    if not safe_name or safe_name in {'.', '..'}:
+        raise ValueError('Некорректное имя файла')
+
+    return safe_name
+
+
+def _safe_next_url(request, default):
+    next_url = request.POST.get('next')
+
+    if (
+        next_url
+        and url_has_allowed_host_and_scheme(
+            next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        )
+    ):
+        return next_url
+
+    return default
+
+
+def _no_store(response):
+    response['Cache-Control'] = (
+        'private, no-store, no-cache, must-revalidate'
+    )
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    return response
+
+
+@login_required
+def authenticated_media(request, path):
+    """
+    Отдаёт только обычный MEDIA_ROOT и только после авторизации.
+    PRIVATE/INBOX сюда физически не входят: они лежат в protected_media.
+    """
+    normalized_path = str(path).replace('\\', '/')
+
+    response = django_static_serve(
+        request,
+        normalized_path,
+        document_root=settings.MEDIA_ROOT,
+        show_indexes=False,
+    )
+
+    # Браузер может хранить обычный медиаконтент, но должен
+    # перепроверять доступ при каждом открытии URL.
+    response['Cache-Control'] = 'private, no-cache'
+    return response
 
 
 class HomePasswordChangeView(PasswordChangeView):
@@ -24,7 +105,9 @@ class HomePasswordChangeView(PasswordChangeView):
     def form_valid(self, form):
         response = super().form_valid(form)
 
-        profile = self.request.user.profile
+        profile, _ = Profile.objects.get_or_create(
+            user=self.request.user,
+        )
         profile.must_change_password = False
         profile.save(
             update_fields=['must_change_password'],
@@ -39,24 +122,23 @@ def gallery(request):
         photos = request.FILES.getlist('photos')
 
         if photos:
-            can_manage_private = (
-                    request.user.is_superuser
-                    or request.user.profile.can_manage_private
+            can_manage_private = _can_manage_private(
+                request.user
             )
 
             if can_manage_private:
                 batch_id = str(uuid.uuid4())
 
                 photo_root = (
-                        settings.INBOX_PHOTOS_ROOT
-                        / str(request.user.id)
-                        / batch_id
+                    settings.INBOX_PHOTOS_ROOT
+                    / str(request.user.id)
+                    / batch_id
                 )
 
                 thumbnail_root = (
-                        settings.INBOX_THUMBNAILS_ROOT
-                        / str(request.user.id)
-                        / batch_id
+                    settings.INBOX_THUMBNAILS_ROOT
+                    / str(request.user.id)
+                    / batch_id
                 )
 
                 photo_root.mkdir(
@@ -70,8 +152,6 @@ def gallery(request):
                 )
 
             else:
-                batch_id = None
-
                 photo_root = settings.COMMON_PHOTOS_ROOT
                 thumbnail_root = settings.COMMON_THUMBNAILS_ROOT
 
@@ -87,8 +167,12 @@ def gallery(request):
                     image.verify()
                     photo.seek(0)
 
+                    upload_name = _upload_filename(
+                        photo.name
+                    )
+
                     filename = storage.save(
-                        photo.name,
+                        upload_name,
                         photo,
                     )
 
@@ -100,30 +184,31 @@ def gallery(request):
 
                     saved_count += 1
 
-                except UnidentifiedImageError:
+                except (UnidentifiedImageError, ValueError):
                     messages.error(
                         request,
                         f'{photo.name} не является изображением',
                     )
 
             if (
-                    can_manage_private
-                    and saved_count > 0
+                can_manage_private
+                and saved_count > 0
             ):
-                return redirect(
-                    'review_upload'
-                )
+                return redirect('review_upload')
 
             return redirect('gallery')
 
-    files = os.listdir(
-        settings.COMMON_PHOTOS_ROOT
-    )
+    files = [
+        path.name
+        for path in settings.COMMON_PHOTOS_ROOT.iterdir()
+        if path.is_file()
+    ]
+
     files.sort(
         key=lambda f: os.path.getmtime(
             settings.COMMON_PHOTOS_ROOT / f
         ),
-        reverse=True
+        reverse=True,
     )
     files = files[:3]
 
@@ -135,11 +220,17 @@ def gallery(request):
             'date': get_photo_date(filename),
         })
 
-    video_files = os.listdir(settings.VIDEOS_ROOT)
+    video_files = [
+        path.name
+        for path in settings.VIDEOS_ROOT.iterdir()
+        if path.is_file()
+    ]
 
     video_files.sort(
-        key=lambda f: os.path.getmtime(settings.VIDEOS_ROOT / f),
-        reverse=True
+        key=lambda f: os.path.getmtime(
+            settings.VIDEOS_ROOT / f
+        ),
+        reverse=True,
     )
 
     video_files = video_files[:3]
@@ -166,12 +257,7 @@ def gallery(request):
 
 @login_required
 def review_upload(request):
-    can_manage_private = (
-        request.user.is_superuser
-        or request.user.profile.can_manage_private
-    )
-
-    if not can_manage_private:
+    if not _can_manage_private(request.user):
         raise Http404
 
     user_photo_root = (
@@ -307,15 +393,10 @@ def review_upload(request):
 
 @login_required
 def inbox_thumbnail(request, batch_id, filename):
-    can_manage_private = (
-        request.user.is_superuser
-        or request.user.profile.can_manage_private
-    )
-
-    if not can_manage_private:
+    if not _can_manage_private(request.user):
         raise Http404
 
-    safe_filename = Path(filename).name
+    safe_filename = _safe_filename(filename)
 
     thumbnail_path = (
         settings.INBOX_THUMBNAILS_ROOT
@@ -330,26 +411,34 @@ def inbox_thumbnail(request, batch_id, filename):
     ):
         raise Http404
 
-    return FileResponse(
+    response = FileResponse(
         open(thumbnail_path, 'rb'),
     )
+
+    return _no_store(response)
 
 
 @login_required
 def all_photos(request):
-    files = os.listdir(
-        settings.COMMON_PHOTOS_ROOT
-    )
+    files = [
+        path.name
+        for path in settings.COMMON_PHOTOS_ROOT.iterdir()
+        if path.is_file()
+    ]
+
     photos = []
+
     for filename in files:
         photos.append({
             'filename': filename,
-            'date': get_photo_date(filename)
+            'date': get_photo_date(filename),
         })
+
     photos.sort(
         key=lambda photo: photo['date'],
-        reverse=True
+        reverse=True,
     )
+
     per_page = request.GET.get('per_page', 20)
 
     try:
@@ -363,17 +452,16 @@ def all_photos(request):
     page = request.GET.get('page')
     page_obj = paginator.get_page(page)
 
-    return render(request, 'gallery/all_photos.html', {'page_obj': page_obj})
+    return render(
+        request,
+        'gallery/all_photos.html',
+        {'page_obj': page_obj},
+    )
 
 
 @login_required
 def private_photos(request):
-    can_manage_private = (
-        request.user.is_superuser
-        or request.user.profile.can_manage_private
-    )
-
-    if not can_manage_private:
+    if not _can_manage_private(request.user):
         raise Http404
 
     files = [
@@ -426,15 +514,10 @@ def private_photos(request):
 
 @login_required
 def private_thumbnail(request, filename):
-    can_manage_private = (
-        request.user.is_superuser
-        or request.user.profile.can_manage_private
-    )
-
-    if not can_manage_private:
+    if not _can_manage_private(request.user):
         raise Http404
 
-    safe_filename = Path(filename).name
+    safe_filename = _safe_filename(filename)
 
     thumbnail_path = (
         settings.PRIVATE_THUMBNAILS_ROOT
@@ -451,24 +534,15 @@ def private_thumbnail(request, filename):
         open(thumbnail_path, 'rb'),
     )
 
-    response['Cache-Control'] = (
-        'private, max-age=86400'
-    )
-
-    return response
+    return _no_store(response)
 
 
 @login_required
 def private_photo_file(request, filename):
-    can_manage_private = (
-        request.user.is_superuser
-        or request.user.profile.can_manage_private
-    )
-
-    if not can_manage_private:
+    if not _can_manage_private(request.user):
         raise Http404
 
-    safe_filename = Path(filename).name
+    safe_filename = _safe_filename(filename)
 
     photo_path = (
         settings.PRIVATE_PHOTOS_ROOT
@@ -481,21 +555,19 @@ def private_photo_file(request, filename):
     ):
         raise Http404
 
-    return FileResponse(
+    response = FileResponse(
         open(photo_path, 'rb'),
     )
 
+    return _no_store(response)
+
+
 @login_required
 def private_download_photo(request, filename):
-    can_manage_private = (
-        request.user.is_superuser
-        or request.user.profile.can_manage_private
-    )
-
-    if not can_manage_private:
+    if not _can_manage_private(request.user):
         raise Http404
 
-    safe_filename = Path(filename).name
+    safe_filename = _safe_filename(filename)
 
     photo_path = (
         settings.PRIVATE_PHOTOS_ROOT
@@ -508,27 +580,24 @@ def private_download_photo(request, filename):
     ):
         raise Http404
 
-    return FileResponse(
+    response = FileResponse(
         open(photo_path, 'rb'),
         as_attachment=True,
         filename=safe_filename,
     )
 
+    return _no_store(response)
+
 
 @login_required
 def private_delete_photo(request, filename):
-    can_manage_private = (
-        request.user.is_superuser
-        or request.user.profile.can_manage_private
-    )
-
-    if not can_manage_private:
+    if not _can_manage_private(request.user):
         raise Http404
 
     if request.method != 'POST':
         return redirect('private_photos')
 
-    safe_filename = Path(filename).name
+    safe_filename = _safe_filename(filename)
 
     delete_photo_files(
         safe_filename,
@@ -536,22 +605,14 @@ def private_delete_photo(request, filename):
         settings.PRIVATE_THUMBNAILS_ROOT,
     )
 
-    next_page = request.POST.get(
-        'next',
-        '/private/',
+    return redirect(
+        _safe_next_url(request, '/private/')
     )
-
-    return redirect(next_page)
 
 
 @login_required
 def private_delete_selected_photos(request):
-    can_manage_private = (
-        request.user.is_superuser
-        or request.user.profile.can_manage_private
-    )
-
-    if not can_manage_private:
+    if not _can_manage_private(request.user):
         raise Http404
 
     if request.method != 'POST':
@@ -560,7 +621,10 @@ def private_delete_selected_photos(request):
     filenames = request.POST.getlist('photos')
 
     for filename in filenames:
-        safe_filename = Path(filename).name
+        try:
+            safe_filename = _safe_filename(filename)
+        except Http404:
+            continue
 
         delete_photo_files(
             safe_filename,
@@ -573,10 +637,18 @@ def private_delete_selected_photos(request):
 
 @login_required
 def delete_photo(request, filename):
+    safe_filename = _safe_filename(filename)
+
     if request.method == 'POST':
-        delete_photo_files(filename)
-        next_page = request.POST.get('next', '/')
-        return redirect(next_page)
+        delete_photo_files(
+            safe_filename,
+            settings.COMMON_PHOTOS_ROOT,
+            settings.COMMON_THUMBNAILS_ROOT,
+        )
+
+        return redirect(
+            _safe_next_url(request, '/')
+        )
 
     return redirect('gallery')
 
@@ -589,7 +661,10 @@ def delete_selected_photos(request):
     filenames = request.POST.getlist('photos')
 
     for filename in filenames:
-        safe_filename = Path(filename).name
+        try:
+            safe_filename = _safe_filename(filename)
+        except Http404:
+            continue
 
         delete_photo_files(
             safe_filename,
@@ -602,7 +677,7 @@ def delete_selected_photos(request):
 
 @login_required
 def download_photo(request, filename):
-    safe_filename = Path(filename).name
+    safe_filename = _safe_filename(filename)
 
     photo_path = (
         settings.COMMON_PHOTOS_ROOT

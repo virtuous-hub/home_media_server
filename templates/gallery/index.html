@@ -105,8 +105,12 @@
     <div class="latest-videos">
 
         {% for video in latest_videos %}
-            <div class="video-card"
-                 onclick="openVideo('/media/videos/{{ video.filename }}', '{{ video.filename }}')">
+            <div
+                class="video-card"
+                data-video-url="/media/videos/{{ video.filename }}"
+                data-filename="{{ video.filename }}"
+                onclick="handleVideoClick(this)"
+            >
                 <img
                     src="/media/video_thumbnails/{{ video.thumbnail }}"
                     alt="Видео"

@@ -1,7 +1,19 @@
 import subprocess
+from pathlib import Path
+
 import imageio_ffmpeg
 from django.conf import settings
-from pathlib import Path
+
+
+def _safe_leaf_name(filename):
+    """Не позволяет имени файла выйти из каталога videos."""
+    normalized = str(filename).replace('\\', '/')
+    safe_name = Path(normalized).name
+
+    if not safe_name or safe_name in {'.', '..'}:
+        raise ValueError('Некорректное имя файла')
+
+    return safe_name
 
 
 def ensure_video_directories():
@@ -16,10 +28,13 @@ def ensure_video_directories():
 
 
 def create_video_thumbnail(filename):
+    filename = _safe_leaf_name(filename)
+
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     video_path = settings.VIDEOS_ROOT / filename
     thumbnail_name = f'{video_path.stem}.jpg'
     thumbnail_path = settings.VIDEO_THUMBNAILS_ROOT / thumbnail_name
+
     subprocess.run(
         [
             ffmpeg,
@@ -34,10 +49,13 @@ def create_video_thumbnail(filename):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
     return thumbnail_name
 
 
 def delete_video_files(filename):
+    filename = _safe_leaf_name(filename)
+
     video_path = settings.VIDEOS_ROOT / filename
     thumbnail_name = f'{Path(filename).stem}.jpg'
     thumbnail_path = settings.VIDEO_THUMBNAILS_ROOT / thumbnail_name
