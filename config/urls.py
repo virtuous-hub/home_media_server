@@ -1,5 +1,10 @@
 from django.contrib import admin
 from django.urls import include, path
+from django.contrib.auth.views import (
+    LoginView,
+    LogoutView,
+    PasswordChangeDoneView,
+)
 
 from gallery.views import (
     HomePasswordChangeView,
@@ -27,7 +32,30 @@ urlpatterns = [
         name='password_change',
     ),
     path(
-        'accounts/',
-        include('django.contrib.auth.urls'),
+        'accounts/login/',
+        LoginView.as_view(
+            template_name='registration/login.html'
+        ),
+        name='login',
+    ),
+
+    path(
+        'accounts/logout/',
+        LogoutView.as_view(),
+        name='logout',
+    ),
+
+    path(
+        'accounts/password_change/',
+        HomePasswordChangeView.as_view(),
+        name='password_change',
+    ),
+
+    path(
+        'accounts/password_change/done/',
+        PasswordChangeDoneView.as_view(
+            template_name='registration/password_change_done.html'
+        ),
+        name='password_change_done',
     ),
 ]
