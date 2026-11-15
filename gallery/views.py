@@ -421,21 +421,13 @@ def inbox_thumbnail(request, batch_id, filename):
 @login_required
 def all_photos(request):
     files = [
-        path.name
+        path
         for path in settings.COMMON_PHOTOS_ROOT.iterdir()
         if path.is_file()
     ]
 
-    photos = []
-
-    for filename in files:
-        photos.append({
-            'filename': filename,
-            'date': get_photo_date(filename),
-        })
-
-    photos.sort(
-        key=lambda photo: photo['date'],
+    files.sort(
+        key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
 
@@ -443,21 +435,36 @@ def all_photos(request):
 
     try:
         per_page = int(per_page)
-    except ValueError:
+    except (ValueError, TypeError):
         per_page = 20
 
     per_page = max(1, min(per_page, 100))
 
-    paginator = Paginator(photos, per_page)
-    page = request.GET.get('page')
-    page_obj = paginator.get_page(page)
+    paginator = Paginator(files, per_page)
+    page_obj = paginator.get_page(
+        request.GET.get('page')
+    )
+    page_range = paginator.get_elided_page_range(
+        number=page_obj.number,
+        on_each_side=2,
+        on_ends=1,
+    )
+    page_obj.object_list = [
+        {
+            'filename': path.name,
+            'date': get_photo_date(path.name),
+        }
+        for path in page_obj.object_list
+    ]
 
     return render(
         request,
         'gallery/all_photos.html',
-        {'page_obj': page_obj},
+        {
+            'page_obj': page_obj,
+            'page_range': page_range,
+        },
     )
-
 
 @login_required
 def private_photos(request):

@@ -1,0 +1,55 @@
+#Git
+.git/
+.gitignore
+
+# Docker build artifacts
+*.tar
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# PyCharm
+.idea/
+
+# Django database
+db.sqlite3
+*.sqlite3
+
+# Media
+media/
+protected_media/
+staticfiles/
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+
+# Local certificates
+cert/
+*.cert
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SQLite temporary files
+*.sqlite3-*
+*.sqlite3.*
+
+# Protected uploads
+protect_media/

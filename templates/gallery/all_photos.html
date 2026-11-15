@@ -88,23 +88,21 @@
         {% endif %}
     </div>
 
-    <div class="page-numbers">
-        {% for num in page_obj.paginator.page_range %}
 
-            {% if num == page_obj.number %}
-                <span class="page-number active">
-                    {{ num }}
-                </span>
-            {% else %}
-                <a href="?page={{ num }}&per_page={{ page_obj.paginator.per_page }}"
-                   class="page-number">
-                    {{ num }}
-                </a>
-            {% endif %}
+<div class="page-numbers">
+    {% for num in page_range %}
+        {% if num == page_obj.paginator.ELLIPSIS %}
+            <span class="page-ellipsis">…</span>
+        {% elif num == page_obj.number %}
+            <span class="page-number active">{{ num }}</span>
+        {% else %}
+            <a href="?page={{ num }}&per_page={{ page_obj.paginator.per_page }}"
+               class="page-number">{{ num }}</a>
+        {% endif %}
+    {% endfor %}
+</div>
 
-        {% endfor %}
-    </div>
-
+	
     <div class="pagination-right">
         {% if page_obj.has_next %}
             <a href="?page={{ page_obj.next_page_number }}&per_page={{ page_obj.paginator.per_page }}"

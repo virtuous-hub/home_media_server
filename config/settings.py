@@ -160,7 +160,7 @@ MAILERS = {
 }
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path('/srv/media/homeserver/media')
 
 PHOTOS_ROOT = MEDIA_ROOT / 'photos'
 THUMBNAILS_ROOT = MEDIA_ROOT / 'thumbnails'
@@ -168,7 +168,7 @@ THUMBNAILS_ROOT = MEDIA_ROOT / 'thumbnails'
 VIDEOS_ROOT = MEDIA_ROOT / 'videos'
 VIDEO_THUMBNAILS_ROOT = MEDIA_ROOT / 'video_thumbnails'
 
-PROTECTED_MEDIA_ROOT = BASE_DIR / 'protected_media'
+PROTECTED_MEDIA_ROOT = Path('/srv/media/homeserver/protect_media')
 
 COMMON_PHOTOS_ROOT = PHOTOS_ROOT / 'common'
 COMMON_THUMBNAILS_ROOT = THUMBNAILS_ROOT / 'common'
